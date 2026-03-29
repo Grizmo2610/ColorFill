@@ -5,28 +5,22 @@ import cv2
 import torch
 from torch.utils.data import Dataset
 import os
-from tqdm import tqdm
 
 class ImageNet(Dataset):
-    def __init__(self, root: str, transform=None, p: float = 0.5, max_hint: float = 0.1):
+    def __init__(self, root: str, annotations_path, transform=None, p: float = 0.5, max_hint: float = 0.1):
         self.root = root
         self.transform = transform
         self.p = p
         self.max_hint = max_hint
-        self.paths = []
-        all_dirs = list(os.walk(root))
-        loop = tqdm(all_dirs, desc="Adding data")
-
-        for dirpath, dirnames, filenames in loop:
-            for f in filenames:
-                if f.lower().endswith(('.png', '.jpg', '.jpeg')):
-                    self.paths.append(os.path.join(dirpath, f))
+        with open(annotations_path) as f:
+            self.dataset = f.readlines()
 
     def __len__(self):
-        return len(self.paths)
+        return len(self.dataset)
 
     def __getitem__(self, idx: int):
-        path = self.paths[idx]
+        path = self.dataset[idx].strip().split(" ")[0] + ".JPEG"
+        path = os.path.join(self.root, path)
         image = cv2.imread(path)  # BGR
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         if self.transform:
