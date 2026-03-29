@@ -140,7 +140,8 @@ def train(model: nn.Module,
 
     loops = tqdm(train_loader, desc="Training", leave=False)
 
-    for loop in loops:
+    
+    for i, loop in enumerate(loops):
         images, L, ab, outputs = forward_pass(loop, model, device)
 
         optimizer.zero_grad()
@@ -178,7 +179,7 @@ def evaluate(model: nn.Module,
 
     loops = tqdm(data_loader, desc="Evaluating", leave=False)
 
-    for loop in loops:
+    for i, loop in enumerate(loops):
         images, L, ab, outputs = forward_pass(loop, model, device)
 
         loss, deltaE = compute_metrics(outputs, ab, L, loss_fn)
@@ -200,7 +201,7 @@ def fit(model: nn.Module, optimizer: torch.optim.Adam,
         gamma: float = 0.5, patience: int = 6,
         save_paths: dict[str, str] = {
             "loss":"best_loss_model.pth",
-            "delta_e":"best_delta_model.pth"
+            "deltaE":"best_delta_model.pth"
         },
         history: dict[str, dict[str, list]] = {},
         roots: dict[str, str] = {"model": "models", "sample": "sample"},
@@ -216,10 +217,10 @@ def fit(model: nn.Module, optimizer: torch.optim.Adam,
         start_time: float = time.time()
         print('=' * 25 + f'Epoch {epoch + 1:02d}/{start_epoch + epochs:02d}' + '=' * 25)
         train_loader = loader["train"]
-        train_result: dict[str, float] = train(model, train_loader, optimizer, device, criterion)
+        train_result: dict[str, dict[str, float]] = train(model, train_loader, optimizer, device, criterion)
         if "val" in loader.keys():
             val_loader = loader["val"]
-            val_result: Optional[dict[str, float]] = evaluate(model, val_loader, device, criterion)
+            val_result: Optional[dict[str, dict[str, float]]] = evaluate(model, val_loader, device, criterion)
         else:
             val_result = None
         keys = list(history['train'].keys())
@@ -254,16 +255,16 @@ def fit(model: nn.Module, optimizer: torch.optim.Adam,
                 f"Val Loss: {val_result['loss']:.4f} | "
             )
             print(
-                # Overal RMSE
-                f"Train ΔE: {train_result['rmse']:.4f} | "
-                f"Val ΔE: {val_result['rmse']:.4f} | "
+                # Overal Delta E
+                f"Train ΔE: {train_result['deltaE']:.4f} | "
+                f"Val ΔE: {val_result['deltaE']:.4f} | "
             )
         else:
             print(
                 f"Train Loss: {train_result['loss']:.4f} | "
             )
             print(
-                # Overal RMSE
+                # Overal Delta E
                 f"Train ΔE: {train_result['rmse']:.4f} | "
             )
 

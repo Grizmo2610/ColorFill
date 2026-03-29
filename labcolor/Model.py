@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -6,7 +5,7 @@ class NeuralColor(nn.Module):
     def __init__(self):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Conv2d(1, 64, 3, padding=1), nn.ReLU(),
+            nn.Conv2d(4, 64, 3, padding=1), nn.ReLU(),
             nn.Conv2d(64, 128, 3, padding=1), nn.ReLU(),
             nn.MaxPool2d(2),
 
