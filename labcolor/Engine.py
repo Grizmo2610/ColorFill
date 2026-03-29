@@ -62,6 +62,12 @@ def save_best_models(
     if best_metrics is None:
         best_metrics = {}
 
+    # Nếu DataParallel, lấy model gốc
+    if isinstance(model, torch.nn.DataParallel):
+        model_to_save = model.module
+    else:
+        model_to_save = model
+
     updated = False
 
     for metric, value in val_result.items():
@@ -75,22 +81,28 @@ def save_best_models(
 
         if value < best_val:
             best_metrics[metric] = value
-            torch.save(model.state_dict(), save_path)
+            torch.save(model_to_save.state_dict(), save_path)
             print(f"✅✅Best {metric} model saved at epoch {epoch+1:02d}")
             updated = True
 
     return updated
+
 
 def save_epoch_model(
     model: nn.Module,
     epoch: int,
     root: str="models"
 ):
-    # Save the model for the current epoch (regardless of performance)
-    path = os.path.join(root, f"model_epoch_{epoch + 1:02d}.pth")
-    torch.save(model.state_dict(), path)
-    print(f"Model for epoch {epoch + 1:02d} saved.")
+    os.makedirs(root, exist_ok=True)
 
+    if isinstance(model, torch.nn.DataParallel):
+        model_to_save = model.module
+    else:
+        model_to_save = model
+
+    path = os.path.join(root, f"model_epoch_{epoch + 1:02d}.pth")
+    torch.save(model_to_save.state_dict(), path)
+    print(f"Model for epoch {epoch + 1:02d} saved.")
 
 def forward_pass(loop, model, device):
     images = loop["image"].to(device, non_blocking=True)
