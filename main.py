@@ -8,7 +8,6 @@ from torch.utils.data import DataLoader, random_split
 
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-
 from labcolor import *
 
 config = {
@@ -20,8 +19,8 @@ config = {
     "plot_image_path": "plot_image.png",
     "history_path": "history.json",
     "model_path": "models/best_delta_E_model.pth",
-    "BATCH_SIZE": 16,
-    "EPOCHS": 10,
+    "BATCH_SIZE": 64,
+    "EPOCHS": 5,
     "IMG_SIZE": 224,
     "LR": 3e-4,
     "ratio": {"train": 0.8, "val": 0.2}
@@ -97,10 +96,12 @@ def build_transforms(IMG_SIZE: int = 224):
 
 
 train_transform, val_transform = build_transforms(config["IMG_SIZE"])
-
-val_dataset = ImageNet(os.path.join(config["ROOT"], "val"), val_transform)
-test_dataset = ImageNet(os.path.join(config["ROOT"], "train"), val_transform)
-train_dataset = ImageNet(os.path.join(config["ROOT"], "train"), train_transform)
+train_annotations_path = "/kaggle/input/competitions/imagenet-object-localization-challenge/ILSVRC/ImageSets/CLS-LOC/train_cls.txt"
+val_annotations_path = "/kaggle/input/competitions/imagenet-object-localization-challenge/ILSVRC/ImageSets/CLS-LOC/val.txt"
+test_annotations_path = "/kaggle/input/competitions/imagenet-object-localization-challenge/ILSVRC/ImageSets/CLS-LOC/test.txt"
+val_dataset = ImageNet(os.path.join(config["ROOT"], "val"), val_annotations_path, val_transform)
+test_dataset = ImageNet(os.path.join(config["ROOT"], "test"), test_annotations_path ,val_transform)
+train_dataset = ImageNet(os.path.join(config["ROOT"], "train"), train_annotations_path ,train_transform)
 
 train_loader = DataLoader(train_dataset, batch_size=config["BATCH_SIZE"], shuffle=True, num_workers=num_workers, pin_memory=True)
 val_loader = DataLoader(val_dataset, batch_size=config["BATCH_SIZE"], shuffle=False, num_workers=num_workers, pin_memory=True)
@@ -114,13 +115,33 @@ default_keys = ['loss', 'deltaE']
 history = init_history(default_keys)
 
 model = NeuralColor().to(device)
+model = torch.nn.DataParallel(model) 
+model.cuda()
 
 loader = {"train": train_loader, "val": val_loader}
 
-optimizer = torch.optim.AdamW(
-    [{"params": model.net.parameters(), "lr": config["LR"]}],
-    weight_decay=0.01)
+# Freeze encoder và middle, chỉ train decoder
+if isinstance(model, torch.nn.DataParallel):
+    for param in model.module.encoder.parameters():
+        param.requires_grad = False
+    for param in model.module.middle.parameters():
+        param.requires_grad = False
+    for param in model.module.decoder.parameters():
+        param.requires_grad = True
+else:
+    for param in model.encoder.parameters():
+        param.requires_grad = False
+    for param in model.middle.parameters():
+        param.requires_grad = False
+    for param in model.decoder.parameters():
+        param.requires_grad = True
 
+# Cập nhật optimizer chỉ với các tham số trainable
+trainable_params = filter(lambda p: p.requires_grad, model.parameters())
+optimizer = torch.optim.AdamW(
+    [{"params": trainable_params, "lr": config["LR"]}],
+    weight_decay=0.01
+)
 
 history = fit(
     model=model, 
@@ -133,5 +154,18 @@ history = fit(
     best_metrics=best_metrics,
 )
 
+for param in model.module.net.parameters() if isinstance(model, torch.nn.DataParallel) else model.net.parameters():
+        param.requires_grad = True
+
+history = fit(
+    model=model, 
+    optimizer=optimizer, 
+    device=device, 
+    epochs=config["EPOCHS"], 
+    criterion=criterion, 
+    loader=loader,
+    history=history, 
+    best_metrics=best_metrics,
+)
 
 plot_history(history, {"plot_image": config["plot_image_path"], "history": config["history_path"]}, root=config["SAMPLE_FOLDER"])
